@@ -293,7 +293,7 @@ async function api(path, params) {
   if (!url) throw new Error('NO_WORKER');
   const u = new URL(url + path);
   Object.keys(params || {}).forEach((k) => u.searchParams.set(k, params[k]));
-  const res = await fetch(u.toString(), token ? { headers: { 'x-app-token': token } } : undefined);
+  const res = await fetch(u.toString(), token ? { cache: 'no-store', headers: { 'x-app-token': token } } : { cache: 'no-store' });
   let j;
   try { j = await res.json(); } catch (e) { throw new Error('The Worker sent a reply this app cannot read (HTTP ' + res.status + ').'); }
   if (!res.ok) throw new Error(j && j.error ? j.error : 'HTTP ' + res.status);
