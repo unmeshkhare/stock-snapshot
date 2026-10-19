@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#EDF0F3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E151C" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Stock Snapshot</title>
+<style>
+:root {
+  --bg: #EDF0F3; --surface: #FFFFFF; --ink: #13202C; --muted: #586976; --rule: #D3DAE0;
+  --up: #0B7F55; --down: #C4352B; --warm: #A85F00; --cool: #1D6FA5;
+  --warm-tint: rgba(184,110,0,.18); --cool-tint: rgba(29,111,165,.18);
+  --s1: #2B5C8A; --s2: #C98B2B; --s3: #5E8F7A;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0E151C; --surface: #16202A; --ink: #E7EDF2; --muted: #93A4B2; --rule: #26323D;
+    --up: #3DCB93; --down: #FF7A6E; --warm: #E6A23C; --cool: #5AA9E6;
+    --warm-tint: rgba(230,162,60,.22); --cool-tint: rgba(90,169,230,.22);
+    --s1: #5B93C4; --s2: #E0A94A; --s3: #7FB59F;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  padding-bottom: calc(40px + env(safe-area-inset-bottom));
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
+.wrap { max-width: 520px; margin: 0 auto; padding: 0 16px; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.up { color: var(--up); } .down { color: var(--down); }
+
+/* header + search */
+.top { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: calc(10px + env(safe-area-inset-top)) 0 10px; }
+.top .wrap { position: relative; display: flex; gap: 8px; }
+#searchForm { flex: 1; }
+#q {
+  width: 100%; height: 48px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--rule);
+  background: var(--surface); outline-offset: 0;
+}
+#q::placeholder { color: var(--muted); }
+.iconbtn {
+  width: 48px; height: 48px; border-radius: 12px; border: 1px solid var(--rule); background: var(--surface);
+  display: grid; place-items: center; flex: none;
+}
+.iconbtn svg { width: 22px; height: 22px; stroke: var(--ink); fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+#suggest {
+  position: absolute; left: 16px; right: 72px; top: 54px; margin: 0; padding: 4px; list-style: none;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; max-height: 60vh; overflow: auto;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+}
+#suggest[hidden] { display: none; }
+#suggest button {
+  width: 100%; text-align: left; background: none; border: 0; padding: 10px 10px; border-radius: 8px; min-height: 48px;
+  display: block;
+}
+#suggest button:active, #suggest button:hover { background: var(--bg); }
+#suggest .sn { display: block; font-weight: 600; }
+#suggest .ss { display: block; font-size: 13px; color: var(--muted); }
+
+/* sections */
+.blk { padding: 20px 0; border-top: 1px solid var(--rule); }
+.blk:first-child { border-top: 0; }
+h1, h2 { margin: 0; }
+h2 { font-size: 16px; font-weight: 600; }
+.blkhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.chg { font-weight: 600; font-size: 15px; }
+
+/* hero */
+.hero { padding-top: 12px; }
+.hero h1 { font-size: 20px; font-weight: 600; line-height: 1.25; }
+.sym { font-size: 14px; color: var(--muted); margin-top: 2px; }
+.price { font-size: 46px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.05; margin-top: 14px; }
+.delta { font-size: 16px; font-weight: 600; margin-top: 4px; }
+.asof { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+/* charts */
+.readout { display: flex; justify-content: space-between; align-items: baseline; margin: 10px 0 2px; min-height: 24px; }
+.rd-main { font-weight: 600; font-size: 18px; }
+.rd-sub { font-size: 13px; color: var(--muted); }
+svg.chart { width: 100%; height: auto; display: block; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+svg.chart text { font-size: 10px; fill: var(--muted); }
+.hilo { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+/* rails */
+.rail { position: relative; height: 10px; border-radius: 5px; background: var(--rule); margin: 22px 0 8px; }
+.rail.rsi { background: linear-gradient(to right, var(--cool-tint) 0 30%, var(--rule) 30% 70%, var(--warm-tint) 70% 100%); }
+.mark {
+  position: absolute; top: -5px; width: 4px; height: 20px; border-radius: 2px; background: var(--ink);
+  transform: translateX(-50%);
+}
+.railnote { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+.signal { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.zone { font-size: 22px; font-weight: 600; }
+.zone.over { color: var(--warm); } .zone.under { color: var(--cool); }
+.sub2 { font-size: 14px; color: var(--muted); margin-top: 2px; }
+.two { display: grid; gap: 28px; }
+
+/* ledger */
+.row { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 0; border-bottom: 1px solid var(--rule); align-items: baseline; }
+.row:last-child { border-bottom: 0; }
+.row .k { font-size: 15px; }
+.row .v { font-size: 18px; font-weight: 600; text-align: right; }
+.row .v.na { color: var(--muted); font-weight: 400; }
+.row .n { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); }
+
+/* holdings */
+.stack { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--rule); margin: 14px 0 6px; gap: 2px; }
+.stack i { display: block; min-width: 2px; }
+.stack i.hatch { background: repeating-linear-gradient(45deg, var(--rule) 0 4px, transparent 4px 8px) !important; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; vertical-align: baseline; }
+.tag { font-size: 11.5px; color: var(--muted); border: 1px solid var(--rule); border-radius: 6px; padding: 0 5px; margin-left: 6px; font-weight: 400; }
+
+/* buttons, banners, misc */
+.btn {
+  min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--rule); background: var(--surface); font-weight: 600;
+}
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn.link { border: 0; background: none; padding: 0 4px; color: var(--cool); }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.banner { border-left: 3px solid var(--warm); padding: 8px 12px; margin: 12px 0 0; font-size: 14px; background: var(--warm-tint); border-radius: 0 8px 8px 0; }
+.empty { padding: 36px 0; }
+.empty h1 { font-size: 22px; font-weight: 600; line-height: 1.25; }
+.empty p { color: var(--muted); max-width: 38ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.chip { min-height: 40px; padding: 0 14px; border-radius: 20px; border: 1px solid var(--rule); background: var(--surface); }
+.skel { height: 14px; border-radius: 7px; background: var(--rule); margin: 12px 0; }
+@media (prefers-reduced-motion: no-preference) { .skel { animation: pulse 1.2s ease-in-out infinite; } }
+@keyframes pulse { 50% { opacity: .45; } }
+details { font-size: 14px; color: var(--muted); }
+details summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--ink); font-weight: 600; font-size: 16px; }
+details ul { padding-left: 18px; margin: 4px 0 12px; }
+details li { margin: 6px 0; }
+.fine { font-size: 12.5px; color: var(--muted); }
+
+/* dialogs */
+dialog {
+  border: 1px solid var(--rule); border-radius: 16px; padding: 0; background: var(--surface); color: var(--ink);
+  width: min(92vw, 460px); max-height: 88vh;
+}
+dialog::backdrop { background: rgba(0,0,0,.45); }
+.dlg { padding: 18px; }
+.dlg h2 { font-size: 18px; margin-bottom: 10px; }
+.field { display: block; margin: 12px 0; }
+.field span { display: block; font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.field small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+.field input { width: 100%; height: 46px; border-radius: 10px; border: 1px solid var(--rule); background: var(--bg); padding: 0 12px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.err { color: var(--down); font-size: 14px; min-height: 20px; margin-top: 4px; }
+.tests { list-style: none; margin: 12px 0 0; padding: 0; }
+.tests li { padding: 8px 0; border-top: 1px solid var(--rule); font-size: 14px; }
+.tests b.ok { color: var(--up); } .tests b.bad { color: var(--down); }
+.tests .d { display: block; color: var(--muted); font-size: 12.5px; word-break: break-word; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <form id="searchForm" autocomplete="off" role="search">
+      <input id="q" type="search" placeholder="Search a listed company, e.g. Tata Motors" enterkeyhint="search"
+             autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Company name or symbol">
+    </form>
+    <button class="iconbtn" id="menuBtn" type="button" aria-label="Settings and connection test">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+    <ul id="suggest" role="listbox" hidden></ul>
+  </div>
+</header>
+
+<main class="wrap" id="view" aria-live="polite"></main>
+<noscript><p class="wrap">This app needs JavaScript.</p></noscript>
+
+<dialog id="settings">
+  <div class="dlg">
+    <h2>Settings</h2>
+    <label class="field"><span>Worker URL</span>
+      <input id="setUrl" type="url" inputmode="url" placeholder="https://stock-snapshot.yourname.workers.dev" autocapitalize="off" spellcheck="false">
+      <small>The address of your Cloudflare Worker. It stays on this phone.</small>
+    </label>
+    <label class="field"><span>App token (optional)</span>
+      <input id="setToken" type="text" autocapitalize="off" spellcheck="false" placeholder="Only if you set APP_TOKEN in the Worker">
+    </label>
+    <div class="actions">
+      <button class="btn primary" id="setSave" type="button">Save</button>
+      <button class="btn" id="setTest" type="button">Test connection</button>
+      <button class="btn link" id="setClose" type="button">Close</button>
+    </div>
+    <ul class="tests" id="testOut"></ul>
+  </div>
+</dialog>
+
+<dialog id="holdDlg">
+  <div class="dlg">
+    <h2>Shareholding numbers</h2>
+    <p class="fine" style="margin:0 0 6px">Copy these from the company's latest shareholding pattern on NSE or BSE. They are saved on this phone only.</p>
+    <label class="field"><span>Quarter</span><input id="hQuarter" type="text" placeholder="e.g. Sep 2026"></label>
+    <div class="grid2">
+      <label class="field"><span>Promoter %</span><input id="hPromoter" type="text" inputmode="decimal" placeholder="50.3"></label>
+      <label class="field"><span>Pledged %</span><input id="hPledged" type="text" inputmode="decimal" placeholder="0"></label>
+      <label class="field"><span>FII %</span><input id="hFii" type="text" inputmode="decimal" placeholder="19.5"></label>
+      <label class="field"><span>DII %</span><input id="hDii" type="text" inputmode="decimal" placeholder="16.2"></label>
+    </div>
+    <p class="fine" style="margin:0">Pledged % means the share of the promoter's own shares that are pledged.</p>
+    <div class="err" id="hErr" role="alert"></div>
+    <div class="actions">
+      <button class="btn primary" id="hSave" type="button">Save numbers</button>
+      <button class="btn" id="hClear" type="button">Clear</button>
+      <button class="btn link" id="hCancel" type="button">Cancel</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+'use strict';
+
+/* Paste your Worker URL here to skip the settings screen on first run. */
+const DEFAULT_WORKER = '';
+
+/* ------------------------------------------------------------ helpers */
+const $ = (s, el) => (el || document).querySelector(s);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage blocked */ } },
+  del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } },
+};
+const cfg = () => ({ url: String(store.get('workerUrl', DEFAULT_WORKER) || '').trim().replace(/\/+$/, ''), token: String(store.get('appToken', '') || '').trim() });
+
+const nf = (d) => ({ minimumFractionDigits: d, maximumFractionDigits: d });
+const inr = (v) => (v == null ? '—' : '₹' + v.toLocaleString('en-IN', nf(2)));
+const fx = (v, d = 2) => (v == null ? '—' : v.toLocaleString('en-IN', nf(d)));
+const pc = (v, d = 2) => (v == null ? '—' : v.toLocaleString('en-IN', nf(d)) + '%');
+const sgn = (v) => (v > 0 ? '+' : v < 0 ? '−' : '');
+
+const IST = 'Asia/Kolkata';
+const dFmt = (ts) => new Date(ts * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: IST });
+const wFmt = (ts) => new Date(ts * 1000).toLocaleDateString('en-IN', { weekday: 'short', timeZone: IST });
+const tFmt = (ts) => new Date(ts * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: IST });
+const dayKey = (ts) => new Date(ts * 1000).toLocaleDateString('en-CA', { timeZone: IST });
+
+/* RSI(14) with Wilder smoothing. Returns null when there are too few closes. */
+function rsi14(closes) {
+  const p = 14;
+  if (!closes || closes.length < p + 1) return null;
+  let g = 0, l = 0;
+  for (let i = 1; i <= p; i++) {
+    const d = closes[i] - closes[i - 1];
+    g += Math.max(d, 0); l += Math.max(-d, 0);
+  }
+  g /= p; l /= p;
+  for (let i = p + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    g = (g * (p - 1) + Math.max(d, 0)) / p;
+    l = (l * (p - 1) + Math.max(-d, 0)) / p;
+  }
+  if (l === 0) return g === 0 ? 50 : 100;
+  return 100 - 100 / (1 + g / l);
+}
+function rsiZone(v) {
+  if (v == null) return { label: 'Not enough data', cls: '', text: 'Needs at least 15 daily closes.' };
+  if (v >= 70) return { label: 'Overbought', cls: 'over', text: 'RSI is 70 or higher. The price has risen fast and may be stretched.' };
+  if (v <= 30) return { label: 'Oversold', cls: 'under', text: 'RSI is 30 or lower. The price has fallen fast and may be stretched.' };
+  return { label: 'Neutral', cls: '', text: 'RSI is between 30 and 70.' };
+}
+
+/* Combine NSE data and numbers typed by the user. Typed numbers win. */
+function holdingModel(auto, manual) {
+  const keys = ['promoter', 'pledged', 'fii', 'dii'];
+  const out = {};
+  keys.forEach((k) => {
+    if (manual && manual[k] != null) out[k] = { v: manual[k], src: 'you' };
+    else if (auto && auto[k] != null) out[k] = { v: auto[k], src: 'NSE' };
+    else out[k] = null;
+  });
+  out.quarter = (manual && manual.quarter) || (auto && auto.quarter) || '';
+  return out;
+}
+
+/* ---------------------------------------------------------------- API */
+async function api(path, params) {
+  const { url, token } = cfg();
+  if (!url) throw new Error('NO_WORKER');
+  const u = new URL(url + path);
+  Object.keys(params || {}).forEach((k) => u.searchParams.set(k, params[k]));
+  const res = await fetch(u.toString(), token ? { headers: { 'x-app-token': token } } : undefined);
+  let j;
+  try { j = await res.json(); } catch (e) { throw new Error('The Worker sent a reply this app cannot read (HTTP ' + res.status + ').'); }
+  if (!res.ok) throw new Error(j && j.error ? j.error : 'HTTP ' + res.status);
+  return j;
+}
+
+/* ------------------------------------------------------------- charts */
+const CW = 340, CH = 150, CL = 6, CR = 6, CT = 8, CB = 20;
+
+function chartInner(t, c, kind) {
+  const n = c.length;
+  const min = Math.min(...c), max = Math.max(...c), span = max - min || 1;
+  const x = (i) => CL + (i / (n - 1)) * (CW - CL - CR);
+  const y = (v) => CT + (1 - (v - min) / span) * (CH - CT - CB);
+  const line = c.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join('');
+  const area = line + 'L' + x(n - 1).toFixed(1) + ' ' + (CH - CB) + 'L' + x(0).toFixed(1) + ' ' + (CH - CB) + 'Z';
+  let labels = '';
+  if (kind === 'intraday') {
+    let prev = '';
+    t.forEach((ts, i) => {
+      const k = dayKey(ts);
+      if (k !== prev) {
+        if (i > 0) labels += `<line x1="${x(i).toFixed(1)}" x2="${x(i).toFixed(1)}" y1="${CT}" y2="${CH - CB}" stroke="var(--rule)" stroke-width="1"/>`;
+        labels += `<text x="${(x(i) + 3).toFixed(1)}" y="${CH - 6}">${esc(wFmt(ts))}</text>`;
+        prev = k;
+      }
+    });
+  } else {
+    labels += `<text x="${CL}" y="${CH - 6}">${esc(dFmt(t[0]))}</text>`;
+    labels += `<text x="${CW - CR}" y="${CH - 6}" text-anchor="end">${esc(dFmt(t[n - 1]))}</text>`;
+  }
+  return (
+    `<path d="${area}" fill="currentColor" fill-opacity=".10"/>` +
+    `<path d="${line}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>` +
+    labels +
+    `<g class="cross" visibility="hidden"><line y1="${CT}" y2="${CH - CB}" stroke="var(--muted)" stroke-width="1"/><circle r="4" fill="currentColor" stroke="var(--bg)" stroke-width="2"/></g>`
+  );
+}
+
+function chartBlock(id, title, t, c, kind) {
+  if (!c || c.length < 2) {
+    return `<section class="blk"><h2>${esc(title)}</h2><p class="muted">Not available right now. Try again in a minute.</p></section>`;
+  }
+  const first = c[0], last = c[c.length - 1];
+  const chg = (last / first - 1) * 100;
+  const up = last >= first;
+  const hi = Math.max(...c), lo = Math.min(...c);
+  const nowTxt = kind === 'intraday' ? `${dFmt(t[t.length - 1])}, ${tFmt(t[t.length - 1])}` : dFmt(t[t.length - 1]);
+  return (
+    `<section class="blk" id="${id}">` +
+    `<div class="blkhead"><h2>${esc(title)}</h2><span class="chg num ${up ? 'up' : 'down'}">${sgn(chg)}${Math.abs(chg).toFixed(2)}%</span></div>` +
+    `<div class="readout"><span class="rd-main num">${inr(last)}</span><span class="rd-sub">${esc(nowTxt)}</span></div>` +
+    `<svg class="chart ${up ? 'up' : 'down'}" viewBox="0 0 ${CW} ${CH}" role="img" aria-label="${esc(title)} price chart, from ${esc(fx(first))} to ${esc(fx(last))} rupees">${chartInner(t, c, kind)}</svg>` +
+    `<div class="hilo num"><span>Low ${inr(lo)}</span><span>High ${inr(hi)}</span></div>` +
+    `</section>`
+  );
+}
+
+function attachChart(id, t, c, kind) {
+  const root = document.getElementById(id);
+  if (!root || !c || c.length < 2) return;
+  const svg = $('svg.chart', root), cross = $('.cross', root), line = $('line', cross), dot = $('circle', cross);
+  const main = $('.rd-main', root), sub = $('.rd-sub', root);
+  const n = c.length;
+  const min = Math.min(...c), max = Math.max(...c), span = max - min || 1;
+  const home = { m: main.textContent, s: sub.textContent };
+  function show(clientX) {
+    const r = svg.getBoundingClientRect();
+    const px = ((clientX - r.left) / r.width) * CW;
+    const i = Math.max(0, Math.min(n - 1, Math.round(((px - CL) / (CW - CL - CR)) * (n - 1))));
+    const xx = CL + (i / (n - 1)) * (CW - CL - CR);
+    const yy = CT + (1 - (c[i] - min) / span) * (CH - CT - CB);
+    line.setAttribute('x1', xx); line.setAttribute('x2', xx);
+    dot.setAttribute('cx', xx); dot.setAttribute('cy', yy);
+    cross.setAttribute('visibility', 'visible');
+    main.textContent = inr(c[i]);
+    sub.textContent = kind === 'intraday' ? `${dFmt(t[i])}, ${tFmt(t[i])}` : dFmt(t[i]);
+  }
+  function reset() {
+    cross.setAttribute('visibility', 'hidden');
+    main.textContent = home.m; sub.textContent = home.s;
+  }
+  svg.addEventListener('pointermove', (e) => show(e.clientX));
+  svg.addEventListener('pointerdown', (e) => show(e.clientX));
+  svg.addEventListener('pointerleave', reset);
+  svg.addEventListener('pointercancel', reset);
+  svg.addEventListener('pointerup', (e) => { if (e.pointerType !== 'mouse') reset(); });
+}
+
+/* -------------------------------------------------------------- views */
+const view = $('#view');
+let current = null; // { symbol, data, holdAuto, holdStatus }
+
+function recent() { return store.get('recent', []); }
+function remember(symbol, name) {
+  const list = recent().filter((r) => r.symbol !== symbol);
+  list.unshift({ symbol, name });
+  store.set('recent', list.slice(0, 8));
+}
+
+function showEmpty() {
+  const { url } = cfg();
+  const r = recent();
+  let html = '<div class="empty">';
+  if (!url) {
+    html +=
+      '<h1>Connect your Worker first</h1>' +
+      '<p>This app reads market data through a small Cloudflare Worker that you own. Paste its address in settings.</p>' +
+      '<div class="actions"><button class="btn primary" id="openSettings" type="button">Open settings</button></div>';
+  } else {
+    html +=
+      '<h1>Type a company name to see its numbers</h1>' +
+      '<p>Price, charts, ratios, momentum and shareholding for any NSE or BSE listed company.</p>';
+    if (r.length) {
+      html += '<div class="chips">' + r.map((x) => `<button class="chip" type="button" data-sym="${esc(x.symbol)}">${esc(x.name.length > 24 ? x.symbol : x.name)}</button>`).join('') + '</div>';
+    }
+  }
+  html += '</div>';
+  view.innerHTML = html;
+}
+
+function showLoading(label) {
+  view.innerHTML =
+    `<div class="blk hero" aria-busy="true"><div class="muted">Loading ${esc(label || '')}…</div>` +
+    '<div class="skel" style="width:70%;height:22px"></div><div class="skel" style="width:45%;height:44px"></div>' +
+    '<div class="skel" style="height:120px"></div><div class="skel"></div><div class="skel" style="width:80%"></div></div>';
+}
+
+function showError(e, symbol) {
+  let msg = e && e.message ? e.message : String(e);
+  if (msg === 'NO_WORKER') return showEmpty();
+  if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) {
+    msg = 'Could not reach your Worker. Check the URL in settings, or your internet connection.';
+  }
+  view.innerHTML =
+    `<div class="empty"><h1>Could not load this company</h1><p>${esc(msg)}</p>` +
+    '<div class="actions">' +
+    (symbol ? `<button class="btn primary" type="button" data-sym="${esc(symbol)}" data-fresh="1">Try again</button>` : '') +
+    '<button class="btn" id="openSettings" type="button">Settings and test</button></div></div>';
+}
+
+function metricRow(label, m, fmt) {
+  const has = m && m.v != null;
+  return (
+    `<div class="row"><span class="k">${esc(label)}</span>` +
+    `<span class="v num ${has ? '' : 'na'}">${has ? fmt(m.v) : 'Not available'}</span>` +
+    `<span class="n">${esc(m ? m.note : '')}</span></div>`
+  );
+}
+
+function holdingHtml() {
+  if (!current) return '';
+  const sym = current.symbol;
+  const hm = holdingModel(current.holdAuto, store.get('hold:' + sym, null));
+  const parts = [
+    { k: 'promoter', label: 'Promoters', col: 'var(--s1)' },
+    { k: 'fii', label: 'FIIs', col: 'var(--s2)' },
+    { k: 'dii', label: 'DIIs', col: 'var(--s3)' },
+  ];
+  const known = parts.filter((p) => hm[p.k]);
+  const sum = known.reduce((a, p) => a + hm[p.k].v, 0);
+  const allKnown = known.length === 3;
+  let bar = '';
+  if (known.length) {
+    bar = known.map((p) => `<i style="flex:${Math.max(hm[p.k].v, 0.4)};background:${p.col}"></i>`).join('');
+    const rest = Math.max(100 - sum, 0);
+    if (rest > 0.05) bar += allKnown ? `<i style="flex:${rest};background:var(--rule)"></i>` : `<i class="hatch" style="flex:${rest}"></i>`;
+  }
+  const tagFor = (e) => (e ? `<span class="tag">${e.src === 'you' ? 'entered by you' : 'NSE'}</span>` : '');
+  const rows = parts.map((p) => {
+    const e = hm[p.k];
+    return `<div class="row"><span class="k"><span class="sw" style="background:${p.col}"></span>${p.label}${tagFor(e)}</span><span class="v num ${e ? '' : 'na'}">${e ? pc(e.v) : 'Not entered'}</span></div>`;
+  }).join('');
+  const pl = hm.pledged;
+  const pledgeRow =
+    `<div class="row"><span class="k">Pledged shares${tagFor(pl)}</span><span class="v num ${pl ? '' : 'na'}">${pl ? pc(pl.v) : 'Not entered'}</span>` +
+    '<span class="n">Share of the promoters\' own shares that are pledged.</span></div>';
+  let status = '';
+  if (current.holdStatus === 'loading') status = '<p class="fine">Checking NSE for the latest quarter…</p>';
+  else if (current.holdStatus === 'unavailable' && !hm.promoter) status = '<p class="fine">NSE did not respond from your Worker, so these numbers need to be entered by hand.</p>';
+  return (
+    '<div class="blkhead"><h2>Shareholding</h2>' + (hm.quarter ? `<span class="muted num" style="font-size:14px">${esc(hm.quarter)}</span>` : '') + '</div>' +
+    (known.length ? `<div class="stack" role="img" aria-label="Shareholding split">${bar}</div>` : '') +
+    rows + pledgeRow + status +
+    '<div class="actions"><button class="btn" id="editHold" type="button">Enter or edit numbers</button></div>'
+  );
+}
+
+function drawHolding() {
+  const el = $('#holding');
+  if (el) el.innerHTML = holdingHtml();
+}
+
+function drawQuote() {
+  const d = current.data;
+  const m = d.metrics || {};
+  const up = d.change >= 0;
+  const closes = d.daily.c;
+  const rsi = rsi14(closes);
+  const zone = rsiZone(rsi);
+
+  // last month window from daily data
+  const lastT = d.daily.t[d.daily.t.length - 1];
+  const idx = d.daily.t.map((_, i) => i).filter((i) => d.daily.t[i] >= lastT - 31 * 86400);
+  const mt = idx.map((i) => d.daily.t[i]), mc = idx.map((i) => d.daily.c[i]);
+
+  const range = d.hi52 - d.lo52;
+  const pos = range > 0 ? Math.min(100, Math.max(0, ((d.price - d.lo52) / range) * 100)) : 50;
+  const belowHigh = d.hi52 > 0 ? ((d.hi52 - d.price) / d.hi52) * 100 : null;
+  const aboveLow = d.lo52 > 0 ? ((d.price - d.lo52) / d.lo52) * 100 : null;
+
+  const failing = Object.keys(d.sources || {}).filter((k) => d.sources[k] !== 'ok');
+  const names = { intraday: '7-day chart', summary: 'ratios from Yahoo', statements: 'ROCE, RONW and similar' };
+  const banner = failing.length
+    ? `<div class="banner">Some data did not load: ${esc(failing.map((k) => names[k] || k).join(', '))}. Prices and the rest are still live. Run the connection test in settings for details.</div>`
+    : '';
+
+  view.innerHTML =
+    '<section class="blk hero">' +
+    `<h1>${esc(d.name)}</h1>` +
+    `<div class="sym">${esc(d.symbol)}${d.exchange ? ' on ' + esc(d.exchange) : ''}</div>` +
+    `<div class="price num">${inr(d.price)}</div>` +
+    `<div class="delta num ${up ? 'up' : 'down'}">${sgn(d.change)}${fx(Math.abs(d.change))} (${sgn(d.changePct)}${fx(Math.abs(d.changePct))}%) vs previous close</div>` +
+    `<div class="asof">As of ${esc(dFmt(d.marketTime))}, ${esc(tFmt(d.marketTime))} IST. Yahoo prices can lag by a few minutes.</div>` +
+    banner +
+    '</section>' +
+
+    chartBlock('chart7', 'Last 7 days', d.intraday && d.intraday.t, d.intraday && d.intraday.c, 'intraday') +
+    chartBlock('chart30', 'Last month', mt, mc, 'daily') +
+
+    '<section class="blk"><div class="two">' +
+      '<div>' +
+        `<div class="signal"><h2>Momentum (RSI 14)</h2><span class="num muted">${rsi == null ? '—' : rsi.toFixed(1)}</span></div>` +
+        `<div class="zone ${zone.cls}" style="margin-top:6px">${esc(zone.label)}</div>` +
+        `<div class="rail rsi" role="img" aria-label="RSI ${rsi == null ? 'unknown' : rsi.toFixed(0)} of 100">${rsi == null ? '' : `<span class="mark" style="left:${rsi.toFixed(1)}%"></span>`}</div>` +
+        '<div class="railnote"><span>Oversold below 30</span><span>Overbought above 70</span></div>' +
+        `<div class="sub2">${esc(zone.text)}</div>` +
+      '</div>' +
+      '<div>' +
+        '<div class="signal"><h2>52-week range</h2></div>' +
+        `<div class="rail" role="img" aria-label="Price is ${pos.toFixed(0)} percent of the way from the 52-week low to the high"><span class="mark" style="left:${pos.toFixed(1)}%"></span></div>` +
+        `<div class="railnote num"><span>Low ${inr(d.lo52)}</span><span>High ${inr(d.hi52)}</span></div>` +
+        `<div class="sub2 num">${belowHigh == null ? '' : fx(belowHigh, 1) + '% below the high, ' + fx(aboveLow, 1) + '% above the low.'}</div>` +
+      '</div>' +
+    '</div></section>' +
+
+    '<section class="blk"><h2>Key numbers</h2>' +
+      metricRow('EPS', m.eps, (v) => '₹' + fx(v)) +
+      metricRow('PE ratio', m.pe, (v) => fx(v)) +
+      metricRow('PEG ratio', m.peg, (v) => fx(v)) +
+      metricRow('ROCE', m.roce, (v) => pc(v)) +
+      metricRow('RONW', m.ronw, (v) => pc(v)) +
+      metricRow('Dividend yield', m.divYield, (v) => pc(v)) +
+      metricRow('Debt to equity', m.de, (v) => fx(v)) +
+      metricRow('Reserves to equity', m.resEq, (v) => fx(v)) +
+    '</section>' +
+
+    '<section class="blk" id="holding"></section>' +
+
+    '<section class="blk"><details><summary>How these are worked out</summary><ul>' +
+      '<li>RSI uses 14 daily closes with Wilder smoothing. 70 or above is overbought, 30 or below is oversold.</li>' +
+      '<li>ROCE is EBIT divided by (total assets minus current liabilities) for the latest financial year.</li>' +
+      '<li>RONW is net profit divided by the average of this year and last year net worth.</li>' +
+      '<li>PEG is the PE ratio divided by the yearly EPS growth rate, averaged over up to three years.</li>' +
+      '<li>Reserves to equity uses retained earnings, because Yahoo does not publish exact reserves and surplus.</li>' +
+      '<li>Prices and ratios come from Yahoo Finance. Promoter holding comes from NSE when it responds. These are unofficial sources, so check anything important against the company filings. This is not investment advice.</li>' +
+    '</ul></details></section>';
+
+  attachChart('chart7', d.intraday && d.intraday.t, d.intraday && d.intraday.c, 'intraday');
+  attachChart('chart30', mt, mc, 'daily');
+  drawHolding();
+}
+
+/* --------------------------------------------------------------- flow */
+let loadToken = 0;
+async function loadSymbol(symbol, fresh) {
+  const my = ++loadToken;
+  closeSuggest();
+  showLoading(symbol);
+  window.scrollTo(0, 0);
+  try {
+    const data = await api('/quote', fresh ? { symbol, fresh: 1 } : { symbol });
+    if (my !== loadToken) return;
+    current = { symbol: data.symbol || symbol, data, holdAuto: null, holdStatus: 'loading' };
+    remember(current.symbol, data.name);
+    try { history.replaceState(null, '', '#' + encodeURIComponent(current.symbol)); } catch (e) { /* ignore */ }
+    $('#q').value = '';
+    drawQuote();
+    api('/holding', { symbol: current.symbol })
+      .then((h) => {
+        if (!current || current.symbol !== (data.symbol || symbol) || my !== loadToken) return;
+        current.holdAuto = h.status === 'ok' ? h : null;
+        current.holdStatus = h.status;
+        drawHolding();
+      })
+      .catch(() => {
+        if (!current || my !== loadToken) return;
+        current.holdStatus = 'unavailable';
+        drawHolding();
+      });
+  } catch (e) {
+    if (my !== loadToken) return;
+    showError(e, symbol);
+  }
+}
+
+/* -------------------------------------------------------------- search */
+const sug = $('#suggest');
+let sugItems = [];
+let sugTimer = null;
+let sugSeq = 0;
+function closeSuggest() { sug.hidden = true; sug.innerHTML = ''; sugItems = []; }
+function renderSuggest(list) {
+  sugItems = list;
+  if (!list.length) {
+    sug.innerHTML = '<li style="padding:12px" class="muted">No NSE or BSE match. Try the full company name.</li>';
+    sug.hidden = false;
+    return;
+  }
+  sug.innerHTML = list.map((r) => `<li><button type="button" data-sym="${esc(r.symbol)}"><span class="sn">${esc(r.name)}</span><span class="ss">${esc(r.symbol)} · ${esc(r.exchange)}</span></button></li>`).join('');
+  sug.hidden = false;
+}
+async function runSearch(q) {
+  const my = ++sugSeq;
+  try {
+    const j = await api('/search', { q });
+    if (my !== sugSeq) return null;
+    renderSuggest(j.results || []);
+    return j.results || [];
+  } catch (e) {
+    if (my !== sugSeq) return null;
+    if (e.message === 'NO_WORKER') { closeSuggest(); showEmpty(); return null; }
+    sug.innerHTML = `<li style="padding:12px" class="muted">${esc(/Failed to fetch|Load failed|NetworkError/i.test(e.message) ? 'Could not reach your Worker. Check settings.' : e.message)}</li>`;
+    sug.hidden = false;
+    return null;
+  }
+}
+$('#q').addEventListener('input', (e) => {
+  const q = e.target.value.trim();
+  clearTimeout(sugTimer);
+  if (q.length < 2) { sugSeq++; closeSuggest(); return; }
+  sugTimer = setTimeout(() => runSearch(q), 250);
+});
+$('#searchForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const q = $('#q').value.trim();
+  if (!q) return;
+  clearTimeout(sugTimer);
+  let list = sugItems;
+  if (!list.length) list = (await runSearch(q)) || [];
+  if (list.length) loadSymbol(list[0].symbol);
+});
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-sym]');
+  if (b) { loadSymbol(b.getAttribute('data-sym'), b.getAttribute('data-fresh') === '1'); return; }
+  if (e.target.closest('#openSettings')) { openSettings(); return; }
+  if (e.target.closest('#editHold')) { openHold(); return; }
+  if (!e.target.closest('#suggest') && !e.target.closest('#q')) closeSuggest();
+});
+
+/* ------------------------------------------------------------ dialogs */
+function openDlg(d) { if (d.showModal) d.showModal(); else d.setAttribute('open', ''); }
+function closeDlg(d) { if (d.close) d.close(); else d.removeAttribute('open'); }
+
+const setDlg = $('#settings');
+function openSettings() {
+  const c = cfg();
+  $('#setUrl').value = c.url;
+  $('#setToken').value = c.token;
+  $('#testOut').innerHTML = '';
+  openDlg(setDlg);
+}
+$('#menuBtn').addEventListener('click', openSettings);
+$('#setClose').addEventListener('click', () => closeDlg(setDlg));
+function saveSettings() {
+  store.set('workerUrl', $('#setUrl').value.trim());
+  store.set('appToken', $('#setToken').value.trim());
+}
+$('#setSave').addEventListener('click', () => {
+  saveSettings();
+  closeDlg(setDlg);
+  if (!current) showEmpty();
+});
+$('#setTest').addEventListener('click', async () => {
+  saveSettings();
+  const out = $('#testOut');
+  out.innerHTML = '<li class="muted">Testing every data source. This takes a few seconds…</li>';
+  try {
+    const j = await api('/diag');
+    out.innerHTML = j.tests.map((t) => `<li><b class="${t.ok ? 'ok' : 'bad'}">${t.ok ? 'Works' : 'Failed'}</b> ${esc(t.name)} <span class="muted num">${t.ms} ms</span><span class="d">${esc(t.detail)}</span></li>`).join('');
+  } catch (e) {
+    const m = e.message === 'NO_WORKER' ? 'Paste your Worker URL above first.'
+      : /Failed to fetch|Load failed|NetworkError/i.test(e.message) ? 'Could not reach the Worker. Check the URL.' : e.message;
+    out.innerHTML = `<li><b class="bad">Failed</b> Worker connection<span class="d">${esc(m)}</span></li>`;
+  }
+});
+
+const holdDlg = $('#holdDlg');
+const hIds = { quarter: '#hQuarter', promoter: '#hPromoter', pledged: '#hPledged', fii: '#hFii', dii: '#hDii' };
+function openHold() {
+  if (!current) return;
+  const man = store.get('hold:' + current.symbol, null) || {};
+  const hm = holdingModel(current.holdAuto, null);
+  Object.keys(hIds).forEach((k) => {
+    const v = man[k] != null ? man[k] : (k === 'quarter' ? hm.quarter : hm[k] ? hm[k].v : '');
+    $(hIds[k]).value = v == null ? '' : v;
+  });
+  $('#hErr').textContent = '';
+  openDlg(holdDlg);
+}
+function parsePct(s) {
+  const t = String(s).trim().replace('%', '').replace(',', '.');
+  if (t === '') return { v: null };
+  const v = Number(t);
+  if (!isFinite(v) || v < 0 || v > 100) return { err: true };
+  return { v };
+}
+$('#hSave').addEventListener('click', () => {
+  const rec = { quarter: $('#hQuarter').value.trim() };
+  for (const k of ['promoter', 'pledged', 'fii', 'dii']) {
+    const p = parsePct($(hIds[k]).value);
+    if (p.err) { $('#hErr').textContent = 'Each percentage must be a number from 0 to 100.'; return; }
+    rec[k] = p.v;
+  }
+  const total = (rec.promoter || 0) + (rec.fii || 0) + (rec.dii || 0);
+  if (total > 100.05) { $('#hErr').textContent = 'Promoter, FII and DII together add up to ' + total.toFixed(1) + '%. They cannot pass 100%.'; return; }
+  store.set('hold:' + current.symbol, rec);
+  closeDlg(holdDlg);
+  drawHolding();
+});
+$('#hClear').addEventListener('click', () => {
+  store.del('hold:' + current.symbol);
+  closeDlg(holdDlg);
+  drawHolding();
+});
+$('#hCancel').addEventListener('click', () => closeDlg(holdDlg));
+
+/* --------------------------------------------------------------- boot */
+(function boot() {
+  const hash = decodeURIComponent((location.hash || '').replace(/^#/, ''));
+  if (hash && /^[A-Za-z0-9.&\-^=]{1,24}$/.test(hash) && cfg().url) loadSymbol(hash.toUpperCase());
+  else showEmpty();
+  if (!cfg().url) setTimeout(openSettings, 300);
+})();
+</script>
+</body>
+</html>
