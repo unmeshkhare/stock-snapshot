@@ -470,9 +470,11 @@ function holdingHtml() {
   const pl = hm.pledged;
   const pledgeRow =
     `<div class="row"><span class="k">Pledged shares${tagFor(pl)}</span><span class="v num ${pl ? '' : 'na'}">${pl ? pc(pl.v) : 'Not entered'}</span>` +
-    '<span class="n">Share of the promoters\' own shares that are pledged.</span></div>';
+    `<span class="n">${esc(!pl && current.holdAuto && current.holdAuto.pledgedNote ? current.holdAuto.pledgedNote + ' Enter it by hand.' : 'Share of the promoters\' own shares that are pledged.')}</span></div>`;
   let status = '';
+  const ff = current.holdAuto && String(current.holdAuto.fullFiling || '');
   if (current.holdStatus === 'loading') status = '<p class="fine">Checking NSE for the latest quarter…</p>';
+  else if (ff && ff.indexOf('failed') === 0 && (!hm.fii || !hm.dii)) status = '<p class="fine">NSE\'s full filing could not be read, so FII, DII and pledged shares need to be entered by hand.</p>';
   else if (current.holdStatus === 'unavailable' && !hm.promoter) status = '<p class="fine">NSE did not respond from your Worker, so these numbers need to be entered by hand.</p>';
   return (
     '<div class="blkhead"><h2>Shareholding</h2>' + (hm.quarter ? `<span class="muted num" style="font-size:14px">${esc(hm.quarter)}</span>` : '') + '</div>' +
@@ -548,7 +550,8 @@ function drawQuote() {
       metricRow('RONW', m.ronw, (v) => pc(v)) +
       metricRow('Dividend yield', m.divYield, (v) => pc(v)) +
       metricRow('Debt to equity', m.de, (v) => fx(v)) +
-      metricRow('Reserves to equity', m.resEq, (v) => fx(v)) +
+      metricRow('Reserves and surplus to equity capital', m.resCap, (v) => fx(v) + 'x') +
+      metricRow('Reserves and surplus to net worth', m.resNw, (v) => pc(v)) +
     '</section>' +
 
     '<section class="blk" id="holding"></section>' +
@@ -558,7 +561,7 @@ function drawQuote() {
       '<li>ROCE is EBIT divided by (total assets minus current liabilities) for the latest financial year.</li>' +
       '<li>RONW is net profit divided by the average of this year and last year net worth.</li>' +
       '<li>PEG is the PE ratio divided by the yearly EPS growth rate, averaged over up to three years.</li>' +
-      '<li>Reserves to equity uses retained earnings, because Yahoo does not publish exact reserves and surplus.</li>' +
+      '<li>Reserves and surplus is shareholders\' equity minus share capital. It is shown as a multiple of share capital and as a share of net worth.</li>' +
       '<li>Prices and ratios come from Yahoo Finance. Promoter holding comes from NSE when it responds. These are unofficial sources, so check anything important against the company filings. This is not investment advice.</li>' +
     '</ul></details></section>';
 
